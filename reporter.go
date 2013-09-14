@@ -160,12 +160,13 @@ func (c *ConsoleReporter) pad() int {
 // ----------------------------------------------------------------------------
 
 type JunitReporter struct {
-	w           io.Writer
-	stack       []string
-	enc         *xml.Encoder
-	invalidName *regexp.Regexp
-	suite       *testsuite
-	current     *testcase
+	w            io.Writer
+	stack        []string
+	enc          *xml.Encoder
+	invalidName  *regexp.Regexp
+	invalidClass *regexp.Regexp
+	suite        *testsuite
+	current      *testcase
 }
 
 type testsuite struct {
@@ -201,19 +202,21 @@ func JUnit(w io.Writer) *JunitReporter {
 	}
 
 	return &JunitReporter{
-		w:           w,
-		stack:       make([]string, 0),
-		enc:         enc,
-		invalidName: regexp.MustCompile(`[^A-Za-z0-9]`),
-		suite:       suite,
+		w:            w,
+		stack:        make([]string, 0),
+		enc:          enc,
+		invalidClass: regexp.MustCompile(`[^A-Za-z0-9]`),
+		invalidName:  regexp.MustCompile(`[^A-Za-z0-9 ]`),
+		suite:        suite,
 	}
 }
 
 func (j *JunitReporter) Start(s *suite) {
 	j.suite.Tests++
+	stack := append([]string{"test"}, j.stack...)
 	j.current = &testcase{
-		Classname: strings.Join(j.stack, "."),
-		Name:      s.Name,
+		Classname: strings.Join(stack, "."),
+		Name:      j.name(s.Name),
 		Failures:  make([]string, 0),
 	}
 }
@@ -238,7 +241,7 @@ func (j *JunitReporter) Skip(s *suite, e *TestError) {
 }
 
 func (j *JunitReporter) Descend(s *suite) {
-	j.stack = append(j.stack, j.sanitize(s.Name))
+	j.stack = append(j.stack, j.className(s.Name))
 }
 
 func (j *JunitReporter) Ascend(*suite) {
@@ -253,7 +256,12 @@ func (j *JunitReporter) Finish([]*SuiteFailure) {
 	j.enc.Encode(j.suite)
 }
 
-func (j *JunitReporter) sanitize(s string) string {
+func (j *JunitReporter) className(s string) string {
+	s = strings.Title(s)
+	return j.invalidClass.ReplaceAllString(s, "")
+}
+
+func (j *JunitReporter) name(s string) string {
 	s = strings.Title(s)
 	return j.invalidName.ReplaceAllString(s, "")
 }
