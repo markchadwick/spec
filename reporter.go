@@ -34,6 +34,8 @@ type ConsoleReporter struct {
 	numPass int
 	numFail int
 	numSkip int
+
+	start time.Time
 }
 
 var (
@@ -53,12 +55,14 @@ func (c *ConsoleReporter) Start(s *suite) {
 
 func (c *ConsoleReporter) Pass(s *suite) {
 	c.numPass++
+
 	c.status(iconPass, s.Name, &s.Stats.Duration)
 	fmt.Println()
 }
 
 func (c *ConsoleReporter) Fail(s *suite, errs []*TestError) {
 	c.numFail++
+
 	name := ansi.Color(s.Name, "red")
 	c.status(iconFail, name, &s.Stats.Duration)
 	fmt.Println()
@@ -66,10 +70,43 @@ func (c *ConsoleReporter) Fail(s *suite, errs []*TestError) {
 
 func (c *ConsoleReporter) Skip(s *suite, skip *TestError) {
 	c.numSkip++
+
 	reason := skip.Error()
 	msg := fmt.Sprintf("%s %s", ansi.Color(s.Name, "yellow"), reason)
 	c.status(" ", msg, &s.Stats.Duration)
 	fmt.Println()
+}
+
+func (c *ConsoleReporter) Descend(*suite) {
+	c.depth++
+}
+
+func (c *ConsoleReporter) Ascend(*suite) {
+	c.depth--
+}
+
+func (c *ConsoleReporter) Begin() {
+	c.start = time.Now()
+	fmt.Println()
+}
+
+func (c *ConsoleReporter) Finish(errs []*SuiteFailure) {
+	duration := time.Now().Sub(c.start)
+	fmt.Printf("\n\n----------------------------------------------------\n")
+	fmt.Printf("%d PASSED %d FAILED %d SKIPPED\n", c.numPass, c.numFail, c.numSkip)
+
+	for _, err := range errs {
+		c.printSuiteFailure(err)
+	}
+
+	var status string
+	if len(errs) == 0 {
+		status = ansi.Color("OK", "green")
+	} else {
+		status = ansi.Color("FAIL", "red")
+	}
+
+	fmt.Printf("%s (%d specs in %s)\n", status, c.numSpec, duration)
 }
 
 func (c *ConsoleReporter) status(icon, msg string, duration *time.Duration) {
@@ -88,36 +125,6 @@ func (c *ConsoleReporter) statusf(msg string, args ...interface{}) {
 	fmt.Print("\r")
 	c.pad()
 	fmt.Printf(msg, args...)
-}
-
-func (c *ConsoleReporter) Descend(*suite) {
-	c.depth++
-}
-
-func (c *ConsoleReporter) Ascend(*suite) {
-	c.depth--
-}
-
-func (c *ConsoleReporter) Begin() {
-	fmt.Println()
-}
-
-func (c *ConsoleReporter) Finish(errs []*SuiteFailure) {
-	fmt.Printf("\n\n----------------------------------------------------\n")
-	fmt.Printf("%d PASSED %d FAILED %d SKIPPED\n", c.numPass, c.numFail, c.numSkip)
-
-	for _, err := range errs {
-		c.printSuiteFailure(err)
-	}
-
-	var status string
-	if len(errs) == 0 {
-		status = ansi.Color("OK", "green")
-	} else {
-		status = ansi.Color("FAIL", "red")
-	}
-
-	fmt.Printf("%s (%d specs)\n", status, c.numSpec)
 }
 
 func (c *ConsoleReporter) printSuiteFailure(err *SuiteFailure) {
