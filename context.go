@@ -3,6 +3,7 @@ package spec
 import (
 	"bufio"
 	"fmt"
+	"github.com/markchadwick/assert"
 	"os"
 	"runtime"
 	"strings"
@@ -47,6 +48,20 @@ func (c *C) fail(err error, depth int) *C {
 
 	c.errors = append(c.errors, testError)
 	return c
+}
+
+// ----------------------------------------------------------------------------
+// "assert" integration
+// ----------------------------------------------------------------------------
+
+func (c *C) Assert(i interface{}) *assert.Assertion {
+	a := assert.Assert(i)
+	a.CheckAdded = func(check assert.Check) {
+		if err := a.CheckOne(check); err != nil {
+			c.fail(err, 3)
+		}
+	}
+	return a
 }
 
 // ----------------------------------------------------------------------------

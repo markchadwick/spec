@@ -1,8 +1,8 @@
 package spec
 
 import (
-	"./github.com/markchadwick/assert" // TODO
 	"errors"
+	"github.com/markchadwick/assert"
 	"testing"
 )
 
