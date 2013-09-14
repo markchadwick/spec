@@ -1,8 +1,11 @@
 package spec
 
 import (
+	"encoding/xml"
 	"fmt"
 	"github.com/mgutz/ansi"
+	"io"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -150,4 +153,107 @@ func (c *ConsoleReporter) pad() int {
 		fmt.Print(pad)
 	}
 	return c.depth * len(pad)
+}
+
+// ----------------------------------------------------------------------------
+// JUnit Reporter
+// ----------------------------------------------------------------------------
+
+type JunitReporter struct {
+	w           io.Writer
+	stack       []string
+	enc         *xml.Encoder
+	invalidName *regexp.Regexp
+	suite       *testsuite
+	current     *testcase
+}
+
+type testsuite struct {
+	Tests int         `xml:"tests,attr"`
+	Cases []*testcase `xml:"testcase"`
+}
+
+func (t *testsuite) Add(c *testcase) {
+	t.Cases = append(t.Cases, c)
+}
+
+type skipped struct {
+	Message string `xml:"message,attr"`
+}
+
+type testcase struct {
+	Classname string   `xml:"classname,attr"`
+	Name      string   `xml:"name,attr"`
+	Failures  []string `xml:"failure"`
+	Skipped   *skipped `xml:"skipped,omitempty"`
+}
+
+func (t *testcase) Fail(msg string) {
+	t.Failures = append(t.Failures, msg)
+}
+
+func JUnit(w io.Writer) *JunitReporter {
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+
+	suite := &testsuite{
+		Cases: make([]*testcase, 0),
+	}
+
+	return &JunitReporter{
+		w:           w,
+		stack:       make([]string, 0),
+		enc:         enc,
+		invalidName: regexp.MustCompile(`[^A-Za-z0-9]`),
+		suite:       suite,
+	}
+}
+
+func (j *JunitReporter) Start(s *suite) {
+	j.suite.Tests++
+	j.current = &testcase{
+		Classname: strings.Join(j.stack, "."),
+		Name:      s.Name,
+		Failures:  make([]string, 0),
+	}
+}
+
+func (j *JunitReporter) Pass(*suite) {
+	j.suite.Add(j.current)
+	j.current = nil
+}
+
+func (j *JunitReporter) Fail(s *suite, errs []*TestError) {
+	for _, err := range errs {
+		j.current.Fail(err.Error())
+	}
+	j.suite.Add(j.current)
+	j.current = nil
+}
+
+func (j *JunitReporter) Skip(s *suite, e *TestError) {
+	j.current.Skipped = &skipped{e.Error()}
+	j.suite.Add(j.current)
+	j.current = nil
+}
+
+func (j *JunitReporter) Descend(s *suite) {
+	j.stack = append(j.stack, j.sanitize(s.Name))
+}
+
+func (j *JunitReporter) Ascend(*suite) {
+	j.stack = j.stack[0 : len(j.stack)-1]
+}
+
+func (j *JunitReporter) Begin() {
+}
+
+func (j *JunitReporter) Finish([]*SuiteFailure) {
+	fmt.Fprint(j.w, xml.Header)
+	j.enc.Encode(j.suite)
+}
+
+func (j *JunitReporter) sanitize(s string) string {
+	s = strings.Title(s)
+	return j.invalidName.ReplaceAllString(s, "")
 }
