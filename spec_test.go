@@ -2,6 +2,7 @@ package spec
 
 import (
 	"./github.com/markchadwick/assert" // TODO
+	"fmt"
 	"testing"
 )
 
@@ -18,40 +19,6 @@ func TestBasicSuiteConstruction(t *testing.T) {
 	assert.That(t, calls).Equals(1)
 }
 
-func TestDeclarativeNestedSuite(t *testing.T) {
-	parentCalled := 0
-	child1Called := 0
-	child2Called := 0
-
-	s := Suite("Array", func(c *C) {
-		parentCalled++
-		arr := []string{}
-
-		c.It("should have size zero", func(c *C) {
-			child1Called++
-			assert.That(t, arr).HasLen(0)
-			arr = append(arr, "woah!")
-			assert.That(t, arr).HasLen(1)
-		})
-
-		c.It("should still have size zero", func(c *C) {
-			child2Called++
-			assert.That(t, arr).HasLen(0)
-			arr = append(arr, "woah!")
-		})
-	})
-
-	assert.That(t, parentCalled).Equals(0)
-	assert.That(t, child1Called).Equals(0)
-	assert.That(t, child2Called).Equals(0)
-
-	s.Run(nilReporter)
-	t.Skip("TODO")
-	assert.That(t, parentCalled).Equals(3)
-	assert.That(t, child1Called).Equals(1)
-	assert.That(t, child2Called).Equals(1)
-}
-
 func TestSuiteChildren(t *testing.T) {
 	suiteRuns := 0
 	child1Runs := 0
@@ -64,7 +31,7 @@ func TestSuiteChildren(t *testing.T) {
 	})
 
 	assert.That(t, suite.children).IsNil()
-	suite.run(nilReporter, false)
+	suite.run(nilReporter)
 	assert.That(t, suite.children).NotNil()
 
 	assert.That(t, suiteRuns).Equals(1)
@@ -89,7 +56,7 @@ func TestRunChild(t *testing.T) {
 		child1 = c.It("child 1", func(c *C) { child1Runs++ })
 		child2 = c.It("child 2", func(c *C) { child2Runs++ })
 	})
-	suite.run(nilReporter, false)
+	suite.run(nilReporter)
 	assert.That(t, suiteRuns).Equals(1)
 	assert.That(t, child1Runs).Equals(0)
 	assert.That(t, child2Runs).Equals(0)
@@ -113,21 +80,6 @@ func TestRunChild(t *testing.T) {
 	assert.That(t, child2Runs).Equals(1)
 }
 
-func TestSuiteBeforeAfter(t *testing.T) {
-	childCalled := false
-	s := Suite("Before and After", func(c *C) {
-		value := 1
-		c.It("should execute in-order", func(c *C) {
-			assert.That(t, value).Equals(1)
-			childCalled = true
-		})
-		value++
-	})
-	s.Run(nilReporter)
-	t.Skip("TODO")
-	assert.That(t, childCalled).IsTrue()
-}
-
 func TestEqualChildren(t *testing.T) {
 	suiteRuns := 0
 	child1Runs := 0
@@ -147,18 +99,30 @@ func TestEqualChildren(t *testing.T) {
 	assert.That(t, child2Runs).Equals(1)
 }
 
-func TestFailingChildrenShouldNotRun(t *testing.T) {
-	t.Skip("Failing children should not run")
+func TestTestErrors(t *testing.T) {
+	Suite("Suite errors", func(c *C) {
+		c.Fail(fmt.Errorf("First error"))
+		c.Fail(fmt.Errorf("Second error"))
+	}).Run(nilReporter)
+
+	errs := nilReporter.lastErrors
+	assert.That(t, errs).HasLen(2)
+	assert.That(t, errs[0].Error()).Equals("First error")
+	assert.That(t, errs[1].Error()).Equals("Second error")
 }
 
-func TestReporterCalledOnStart(t *testing.T) {
-	t.Skip("TODO")
-}
+func TestSuiteSkipHalts(t *testing.T) {
+	started := false
+	finished := false
+	Suite("Skip should halt", func(c *C) {
+		started = true
+		c.Skip("Changed my mind!")
+		finished = true
+	}).Run(nilReporter)
 
-func TestReporterCalledOnPass(t *testing.T) {
-	t.Skip("TODO")
-}
+	assert.That(t, started).IsTrue()
+	assert.That(t, finished).IsFalse()
 
-func TestReporterCalledWithErrsOnFail(t *testing.T) {
-	t.Skip("TODO")
+	src, _ := nilReporter.lastSkip.Source()
+	assert.That(t, src).Equals(`c.Skip("Changed my mind!")`)
 }

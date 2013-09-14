@@ -2,11 +2,24 @@ package spec
 
 import (
 	"fmt"
+	"testing"
+	"time"
 )
+
+func Run(t *testing.T) {
+	if err := DefaultRunner.Run(Console()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type stats struct {
+	Duration time.Duration
+}
 
 type suite struct {
 	Name     string
 	Test     Test
+	Stats    *stats
 	children []*suite
 	ctx      *C
 }
@@ -16,27 +29,37 @@ type Test func(c *C)
 // Create a new suite with the given name and test body.
 func Suite(name string, test Test) *suite {
 	suite := &suite{
-		Name: name,
-		Test: test,
+		Name:  name,
+		Test:  test,
+		Stats: &stats{},
 	}
 	suite.ctx = &C{
 		suite: suite,
 	}
+	DefaultRunner.Add(suite)
 	return suite
 }
 
 // Run a suite and all of its children. If a suite has no children, it will be
 // run exactly once. Otherwise, it will be run before each of its children.
 func (s *suite) Run(reporter Reporter) {
-	errs := s.run(reporter, true)
+	reporter.Start(s)
 
-	if len(errs) != 0 {
+	start := time.Now()
+	errs, skip := s.run(reporter)
+	s.Stats.Duration = time.Now().Sub(start)
+
+	if skip != nil {
+		reporter.Skip(s, skip)
+	} else if len(errs) != 0 {
 		reporter.Fail(s, errs)
 	} else {
+		reporter.Pass(s)
+		reporter.Descend(s)
 		for _, child := range s.children {
 			s.runChild(child, reporter)
 		}
-		reporter.Pass(s)
+		reporter.Ascend(s)
 	}
 }
 
@@ -44,7 +67,21 @@ func (s *suite) Run(reporter Reporter) {
 // have not been seen before, they will be collected as the test runs through
 // its first go. Otherwise, they will be ignored (a tests children should be
 // considered immutable).
-func (s *suite) run(reporter Reporter, report bool) []error {
+func (s *suite) run(reporter Reporter) (errs []*TestError, skip *TestError) {
+	skip = &TestError{}
+
+	// Capture Skip tests, which panic to halt execution of the test. TODO: Also
+	// fatal tests.
+	defer func() {
+		if r := recover(); r != nil {
+			if s, ok := r.(*TestError); ok && s.skip {
+				skip = s
+				return
+			}
+			panic(r)
+		}
+	}()
+
 	if s.children == nil {
 		s.children = make([]*suite, 0)
 		s.ctx.onChild = func(child *suite) {
@@ -53,11 +90,11 @@ func (s *suite) run(reporter Reporter, report bool) []error {
 		defer func() { s.ctx.onChild = nil }()
 	}
 
-	if report {
-		reporter.Start(s)
-	}
+	s.ctx.errors = make([]*TestError, 0)
+	defer func() { s.ctx.errors = nil }()
+
 	s.Test(s.ctx)
-	return nil
+	return s.ctx.errors, nil
 }
 
 // Run this suite only descending into the given child. It should be run in
@@ -75,7 +112,7 @@ func (s *suite) runChild(c *suite, reporter Reporter) error {
 		}
 	}
 	defer func() { s.ctx.onChild = nil }()
-	s.run(reporter, false)
+	s.run(reporter)
 
 	if !childRan {
 		return fmt.Errorf("Found no child named '%s'", c.Name)
