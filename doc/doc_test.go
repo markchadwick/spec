@@ -53,7 +53,7 @@ var _ = spec.Suite("Execution order", func(c *spec.C) {
 		c.Assert(grandparent).Equals(1)
 	})
 
-	c.It("when its not longer the direct parent", func(c *spec.C) {
+	c.It("is no longer the direct parent", func(c *spec.C) {
 		parent := 0
 
 		c.It("should reset the first child", func(c *spec.C) {
