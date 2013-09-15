@@ -49,6 +49,6 @@ var jUnitSpec = Suite("JUnit spec output", func(c *C) {
 })
 
 func TestJunit(t *testing.T) {
-	// t.Skip("Visual inspection time")
+	t.Skip("Visual inspection time")
 	Runner(emptySuite, jUnitSpec).Run(JUnit(os.Stdout))
 }
