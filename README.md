@@ -89,7 +89,7 @@ obvious, but it becomes fuzzier as you move down.
 In general, it is safe to assume that no other suites have messed with what your
 parent declares, but its parent may be fair game. This is largely a matter of
 speeding up tests focused on local changes, but is a departure from how, say,
-[mocha](http://visionmedia.github.io/mocha/) works.
+[mocha](http://mochajs.org/) works.
 
 This spec illustrates the matter.
 
